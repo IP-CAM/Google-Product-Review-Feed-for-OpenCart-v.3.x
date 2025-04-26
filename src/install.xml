@@ -13,9 +13,12 @@ code package and also available on the project page: https://github.com/playfuls
     <file path="catalog/controller/checkout/confirm.php">
         <operation>
             <search><![CDATA[$data['products'] = array();]]></search>
-            <add position="before"><![CDATA[$ps_products = [];
+            <add position="before"><![CDATA[
+            $ps_products = [];
 
-            $this->session->data['ps_order_id'] = $this->session->data['order_id'];
+            if (isset($this->session->data['order_id'])) {
+                $this->session->data['ps_order_id'] = $this->session->data['order_id'];
+            }
 
             $ps_user_info = [];
 
@@ -31,9 +34,9 @@ code package and also available on the project page: https://github.com/playfuls
                 $ps_user_info = array_merge($ps_user_info, array_filter($this->session->data['shipping_address']));
             }
 
-            if ($this->customer->isLogged()) {
-                $this->session->data['ps_email'] = $this->customer->getEmail();
-            } else if (isset($this->session->data['guest']['email'])) {
+            if ($this->customer->isLogged() && $ps_email = $this->customer->getEmail()) {
+                $this->session->data['ps_email'] = $ps_email;
+            } else if (isset($this->session->data['guest']['email']) && $this->session->data['guest']['email']) {
                 $this->session->data['ps_email'] = $this->session->data['guest']['email'];
             } else {
                 $this->session->data['ps_email'] = null;
@@ -80,20 +83,40 @@ code package and also available on the project page: https://github.com/playfuls
             $ps_locale = $this->config->get('config_language'); // e.g., "en" or "en-gb"
 
             if (strpos($ps_locale, '-') !== false) {
-                list($lang, $region) = explode('-', $ps_locale, 2); // Convert "en-gb" -> "en_GB"
+                list($ps_lang, $ps_region) = explode('-', $ps_locale, 2); // Convert "en-gb" -> "en_GB"
 
-                $ps_locale = strtolower($lang) . '_' . strtoupper($region);
+                $ps_locale = strtolower($ps_lang) . '_' . strtoupper($ps_region);
             } else {
                 $ps_locale = strtolower($ps_locale); // Keep as-is (e.g., "en")
             }
 
             $data['ps_lang'] = $ps_locale;
 
-            $data['ps_order_id'] = $this->session->data['ps_order_id'];
-            $data['ps_email'] = $this->session->data['ps_email'];
-            $data['ps_delivery_country'] = $this->session->data['ps_delivery_country'];
+            if (isset($this->session->data['ps_order_id'])) {
+                $data['ps_order_id'] = $this->session->data['ps_order_id'];
+            } else {
+                $args['ps_order_id'] = null;
+            }
+
+            if ($this->session->data['ps_email']) {
+                $data['ps_email'] = $this->session->data['ps_email'];
+            } else {
+                $args['ps_email'] = null;
+            }
+
+            if ($this->session->data['ps_delivery_country']) {
+                $data['ps_delivery_country'] = $this->session->data['ps_delivery_country'];
+            } else {
+                $args['ps_delivery_country'] = null;
+            }
+
             $data['ps_estimated_delivery_date'] = date('Y-m-d', strtotime('+1 day'));
-            $data['ps_products'] = $this->session->data['ps_products'];
+
+            if ($this->session->data['ps_products']) {
+                $data['ps_products'] = $this->session->data['ps_products'];
+            } else {
+                $args['ps_products'] = null;
+            }
 
             unset(
                 $this->session->data['ps_order_id'],
@@ -115,17 +138,19 @@ code package and also available on the project page: https://github.com/playfuls
                 // GCR Opt-in Module Code
                 window.renderOptIn = function() {
                     window.gapi.load('surveyoptin', function() {
-                    window.gapi.surveyoptin.render(
-                        {
-                        "merchant_id": {{ ps_merchant_id}},
-                        "order_id": "{{ ps_order_id }}",
-                        "email": "{{ ps_email }}",
-                        "delivery_country": "{{ ps_delivery_country }}",
-                        "estimated_delivery_date": "{{ ps_estimated_delivery_date }}",
-                        {% if ps_products %}"products": [{{ ps_products}}]{% endif %}
-                        });
+                        window.gapi.surveyoptin.render(
+                            {
+                                "merchant_id": {{ ps_merchant_id }},
+                                "order_id": "{{ ps_order_id }}",
+                                "email": "{{ ps_email }}",
+                                "delivery_country": "{{ ps_delivery_country }}",
+                                "estimated_delivery_date": "{{ ps_estimated_delivery_date }}",
+                                {% if ps_products %}"products": [{{ ps_products}}]{% endif %}
+                            }
+                        );
                     });
                 }
+
                 // GCR Language Code
                 window.___gcfg = { lang: "{{ ps_lang }}" };
             </script>
@@ -156,8 +181,14 @@ code package and also available on the project page: https://github.com/playfuls
                 window.renderBadge = function() {
                     var ratingBadgeContainer = document.createElement("div");
                     document.body.appendChild(ratingBadgeContainer);
+
                     window.gapi.load('ratingbadge', function() {
-                    window.gapi.ratingbadge.render(ratingBadgeContainer, {"merchant_id": {{ ps_merchant_id }}});
+                        window.gapi.ratingbadge.render(
+                            ratingBadgeContainer,
+                            {
+                                "merchant_id": {{ ps_merchant_id }}
+                            }
+                        );
                     });
                 }
             </script>
